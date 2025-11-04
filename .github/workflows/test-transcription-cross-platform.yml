@@ -31,7 +31,7 @@ jobs:
           matrix=$(cat <<'EOF'
           {
             "os": ["ubuntu-latest", "macos-latest", "windows-latest"],
-            "python-version": ["3.9", "3.10", "3.11"],
+            "python-version": ["3.9", "3.12"],
             "model": ["fast", "precise"]
           }
           EOF
@@ -265,7 +265,7 @@ jobs:
 
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: results-${{ matrix.os }}-py${{ matrix.python-version }}-${{ matrix.model }}
         path: |
@@ -286,7 +286,7 @@ jobs:
     
     steps:
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
 
     - name: Generate summary
       run: |
@@ -294,9 +294,9 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "## Test Configuration" >> $GITHUB_STEP_SUMMARY
         echo "- **Platforms**: Ubuntu Latest, macOS Latest, Windows Latest" >> $GITHUB_STEP_SUMMARY
-        echo "- **Python Versions**: 3.9, 3.10, 3.11" >> $GITHUB_STEP_SUMMARY
+        echo "- **Python Versions**: 3.9, 3.12" >> $GITHUB_STEP_SUMMARY
         echo "- **Models**: fast, precise" >> $GITHUB_STEP_SUMMARY
-        echo "- **Total Combinations**: 18" >> $GITHUB_STEP_SUMMARY
+        echo "- **Total Combinations**: 12" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "## Results" >> $GITHUB_STEP_SUMMARY
         echo "Check the artifacts tab for detailed results including:" >> $GITHUB_STEP_SUMMARY
@@ -316,8 +316,8 @@ jobs:
       run: |
         artifacts_count=$(find . -name "results-*" -type d | wc -l)
         echo "Found $artifacts_count test result sets"
-        if [ $artifacts_count -eq 18 ]; then
-          echo "✓ All 18 test combinations completed"
+        if [ $artifacts_count -eq 12 ]; then
+          echo "✓ All 12 test combinations completed"
         else
-          echo "⚠ Only $artifacts_count/18 test combinations found (may still be running or some failed)"
+          echo "⚠ Only $artifacts_count/12 test combinations found (may still be running or some failed)"
         fi

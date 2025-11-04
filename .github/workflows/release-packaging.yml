@@ -38,7 +38,7 @@ jobs:
           tar czf noScribe-{${{ github.ref }}-linux.tar.gz noScribe-{${{ github.ref }}-linux/
           
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: noScribe-{${{ github.ref }}-linux
           path: dist/noScribe-{${{ github.ref }}-linux.tar.gz
@@ -71,7 +71,7 @@ jobs:
           hdiutil create -volname "noScribe" -srcfolder dist/noScribe-{${{ github.ref }}-macos -ov -format UDZO noScribe-{${{ github.ref }}-macos.dmg
           
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: noScribe-{${{ github.ref }}-macos
           path: noScribe-{${{ github.ref }}-macos.dmg
@@ -104,7 +104,7 @@ jobs:
           Compress-Archive -Path dist/noScribe-{${{ github.ref }}-win -DestinationPath noScribe-{${{ github.ref }}-win.zip
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: noScribe-{${{ github.ref }}-win
           path: noScribe-{${{ github.ref }}-win.zip
@@ -121,19 +121,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download Linux artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: noScribe-{${{ github.ref }}-linux
           path: ./artifacts
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: noScribe-{${{ github.ref }}-macos
           path: ./artifacts
 
       - name: Download Windows artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: noScribe-{${{ github.ref }}-win
           path: ./artifacts
