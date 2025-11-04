@@ -1,5 +1,8 @@
 name: Transcription Test Matrix
 
+# This workflow tests transcription across multiple platforms and Python versions
+# It validates dependencies, runs transcription tests, and uploads results
+
 on:
   push:
     branches: [ main, feature/** ]
@@ -36,6 +39,12 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Validate CI Environment
+      run: |
+        python tools/validate_ci_environment.py
+      shell: bash
+      continue-on-error: true
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
@@ -81,25 +90,64 @@ jobs:
         else:
           req_file = "environments/requirements_linux.txt"
         
-        print(f"Using requirements file: {req_file}")
+        print(f"System: {system} ({machine})")
         print(f"Python version: {python_version}")
+        print(f"Using requirements file: {req_file}")
+        
         with open(os.environ['GITHUB_ENV'], 'a') as f:
           f.write(f"REQ_FILE={req_file}\n")
           f.write(f"PYTHON_VERSION={python_version}\n")
+          f.write(f"SYSTEM={system}\n")
       shell: python
     
     - name: Display selected requirements file
       run: |
+        echo "System: ${{ env.SYSTEM }}"
+        echo "Python version: ${{ env.PYTHON_VERSION }}"
         echo "Requirements file: ${{ env.REQ_FILE }}"
+        echo "=== File Contents ==="
         cat "${{ env.REQ_FILE }}"
       shell: bash
 
+    - name: Pre-install compatibility check
+      run: |
+        python -c "
+import sys
+import platform
+
+python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+system = platform.system()
+
+print(f'System: {system}')
+print(f'Python version: {python_version}')
+
+# Check Python version compatibility
+if system == 'Windows' and python_version == '3.9':
+    print('⚠️ Windows Python 3.9 detected - ensuring pyannote.audio compatibility')
+    print('Will enforce pyannote.audio<=3.4.0 for Python 3.9')
+elif python_version.startswith('3.10') or python_version.startswith('3.11'):
+    print('✓ Python 3.10+ detected - all packages compatible')
+"
+      shell: python
+
     - name: Install Python dependencies
       run: |
+        set -e  # Exit on error
         python -m pip install --upgrade pip setuptools wheel
+        
         echo "Installing dependencies from ${{ env.REQ_FILE }}"
-        cat "${{ env.REQ_FILE }}"
-        python -m pip install -r "${{ env.REQ_FILE }}"
+        python -m pip install -r "${{ env.REQ_FILE }}" --verbose 2>&1 | tee pip_install.log
+        
+        # Check if install was successful
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
+          echo "ERROR: Pip install failed with exit code ${PIPESTATUS[0]}"
+          echo "=== PIP INSTALL LOG ==="
+          cat pip_install.log
+          exit 1
+        fi
+        
+        echo "✓ Successfully installed all dependencies"
+      shell: bash
         
     - name: Verify all dependencies are installed
       run: |
@@ -224,6 +272,9 @@ for model_name, model_result in results.get('models', {}).items():
         path: |
           /tmp/noscribe_tests/
           /var/folders/*/T/noscribe_tests/
+          $TEMP/noscribe_tests/
+          C:\\Users\\*\\AppData\\Local\\Temp\\noscribe_tests\\
+        if-no-files-found: warn
 
     - name: Check for failures
       if: failure()
