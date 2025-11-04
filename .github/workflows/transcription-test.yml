@@ -63,9 +63,11 @@ jobs:
       run: |
         import platform
         import os
+        import sys
         
         system = platform.system()
         machine = platform.machine()
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
         
         if system == "Darwin":
           if machine == "arm64":
@@ -80,8 +82,10 @@ jobs:
           req_file = "environments/requirements_linux.txt"
         
         print(f"Using requirements file: {req_file}")
+        print(f"Python version: {python_version}")
         with open(os.environ['GITHUB_ENV'], 'a') as f:
           f.write(f"REQ_FILE={req_file}\n")
+          f.write(f"PYTHON_VERSION={python_version}\n")
       shell: python
     
     - name: Display selected requirements file
@@ -99,51 +103,51 @@ jobs:
         
     - name: Verify all dependencies are installed
       run: |
-        python << 'EOF'
-        import sys
-        
-        required_packages = {
-            'faster_whisper': 'faster-whisper',
-            'torch': 'torch',
-            'torchaudio': 'torchaudio',
-            'pyannote': 'pyannote.audio',
-            'customtkinter': 'customtkinter',
-            'PIL': 'Pillow',
-            'yaml': 'PyYAML',
-            'AdvancedHTMLParser': 'AdvancedHTMLParser',
-            'appdirs': 'appdirs',
-            'i18n': 'python-i18n'
-        }
-        
-        print("=" * 80)
-        print("VERIFYING INSTALLED PACKAGES")
-        print("=" * 80)
-        
-        missing = []
-        for import_name, package_name in required_packages.items():
-            try:
-                __import__(import_name)
-                print(f"✓ {package_name}")
-            except ImportError as e:
-                print(f"✗ {package_name} - {e}")
-                missing.append(package_name)
-        
-        if missing:
-            print("\nMissing packages. Installing...")
-            import subprocess
-            result = subprocess.run(
-                [sys.executable, '-m', 'pip', 'install'] + missing,
-                capture_output=True,
-                text=True
-            )
-            if result.returncode != 0:
-                print(f"ERROR: {result.stderr}")
-                sys.exit(1)
-            print("All missing packages installed successfully")
-        else:
-            print("\n✓ All required packages are installed!")
-        EOF
-      shell: python
+        python -c "
+import sys
+
+required_packages = {
+    'faster_whisper': 'faster-whisper',
+    'torch': 'torch',
+    'torchaudio': 'torchaudio',
+    'pyannote': 'pyannote.audio',
+    'customtkinter': 'customtkinter',
+    'PIL': 'Pillow',
+    'yaml': 'PyYAML',
+    'AdvancedHTMLParser': 'AdvancedHTMLParser',
+    'appdirs': 'appdirs',
+    'i18n': 'python-i18n'
+}
+
+print('=' * 80)
+print('VERIFYING INSTALLED PACKAGES')
+print('=' * 80)
+
+missing = []
+for import_name, package_name in required_packages.items():
+    try:
+        __import__(import_name)
+        print(f'✓ {package_name}')
+    except ImportError as e:
+        print(f'✗ {package_name} - {e}')
+        missing.append(package_name)
+
+if missing:
+    print('\nMissing packages. Installing...')
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, '-m', 'pip', 'install'] + missing,
+        capture_output=True,
+        text=True
+    )
+    if result.returncode != 0:
+        print(f'ERROR: {result.stderr}')
+        sys.exit(1)
+    print('All missing packages installed successfully')
+else:
+    print('\n✓ All required packages are installed!')
+"
+      shell: bash
 
     - name: Verify models directory
       run: |
@@ -158,43 +162,59 @@ jobs:
     - name: Check transcription results
       if: always()
       run: |
-        import json
-        import tempfile
-        from pathlib import Path
-        
-        # Find the latest results file
-        temp_dir = Path(tempfile.gettempdir())
-        results_files = list(temp_dir.glob("*/noscribe_tests/transcription_results.json"))
-        
-        if not results_files:
-          print("ERROR: No test results found!")
-          exit(1)
-        
-        results_file = sorted(results_files, key=lambda x: x.stat().st_mtime, reverse=True)[0]
-        
-        with open(results_file, 'r') as f:
-          results = json.load(f)
-        
-        print("=" * 80)
-        print("TRANSCRIPTION TEST RESULTS")
-        print("=" * 80)
-        
-        for model_name, model_result in results.get("models", {}).items():
-          if model_result:
-            print(f"\n{model_name.upper()} Model: ✓ SUCCESS")
-            print(f"  Language: {model_result.get('language', 'N/A')}")
-            print(f"  Load Time: {model_result.get('load_time_seconds', 0):.2f}s")
-            print(f"  Transcription Time: {model_result.get('transcription_time_seconds', 0):.2f}s")
-            print(f"  Segments: {model_result.get('segments_count', 0)}")
-            
-            # Show first segment
-            if model_result.get("segments"):
-              seg = model_result["segments"][0]
-              print(f"  Sample: [{seg['start']:.2f}s - {seg['end']:.2f}s] {seg['text']}")
-          else:
-            print(f"\n{model_name.upper()} Model: ✗ FAILED")
-            exit(1)
-      shell: python
+        python -c "
+import json
+import tempfile
+from pathlib import Path
+import sys
+
+# Find the latest results file
+temp_dir = Path(tempfile.gettempdir())
+results_files = list(temp_dir.glob('*/noscribe_tests/transcription_results.json'))
+
+if not results_files:
+  # Try alternative paths
+  alt_paths = [
+    Path.home() / '.noscribe' / 'test_results.json',
+    Path.cwd() / 'transcription_results.json',
+    Path.cwd() / 'test_results.json'
+  ]
+  for alt_path in alt_paths:
+    if alt_path.exists():
+      results_files = [alt_path]
+      break
+
+if not results_files:
+  print('ERROR: No test results found!')
+  print(f'Searched in: {temp_dir}')
+  sys.exit(1)
+
+results_file = sorted(results_files, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+
+with open(results_file, 'r') as f:
+  results = json.load(f)
+
+print('=' * 80)
+print('TRANSCRIPTION TEST RESULTS')
+print('=' * 80)
+
+for model_name, model_result in results.get('models', {}).items():
+  if model_result:
+    print(f'\n{model_name.upper()} Model: ✓ SUCCESS')
+    print(f'  Language: {model_result.get(\"language\", \"N/A\")}')
+    print(f'  Load Time: {model_result.get(\"load_time_seconds\", 0):.2f}s')
+    print(f'  Transcription Time: {model_result.get(\"transcription_time_seconds\", 0):.2f}s')
+    print(f'  Segments: {model_result.get(\"segments_count\", 0)}')
+    
+    # Show first segment
+    if model_result.get('segments'):
+      seg = model_result['segments'][0]
+      print(f'  Sample: [{seg[\"start\"]:.2f}s - {seg[\"end\"]:.2f}s] {seg[\"text\"]}')
+  else:
+    print(f'\n{model_name.upper()} Model: ✗ FAILED')
+    sys.exit(1)
+"
+      shell: bash
 
     - name: Upload test results
       if: always()

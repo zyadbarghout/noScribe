@@ -1,0 +1,29 @@
+{
+  "platform": "Darwin",
+  "architecture": "arm64",
+  "python_version": "3.13.7",
+  "timestamp": "2025-11-04 06:56:18",
+  "dependencies": {
+    "faster-whisper": true,
+    "torch": true,
+    "torchaudio": true,
+    "pyannote.audio": true,
+    "customtkinter": true,
+    "Pillow": true,
+    "PyYAML": true,
+    "AdvancedHTMLParser": true,
+    "appdirs": true
+  },
+  "system_deps": {
+    "ffmpeg": true
+  },
+  "models": {
+    "fast": true,
+    "precise": true
+  },
+  "test_audio": true,
+  "transcription": {
+    "success": true,
+    "error": "Could not parse results"
+  }
+}
