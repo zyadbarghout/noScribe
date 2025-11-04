@@ -32,7 +32,7 @@ jobs:
 
     - name: Create notification
       run: |
-        echo "## 📝 New Commit Notification" >> $GITHUB_STEP_SUMMARY
+        echo "## [NOTE] New Commit Notification" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Branch:** \`${{ steps.commit_info.outputs.branch }}\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY

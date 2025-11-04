@@ -124,8 +124,8 @@ jobs:
       run: |
         echo "## Security & Analysis Report" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "✅ Security Scan: ${{ needs.bandit-security.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "✅ Vulnerability Check: ${{ needs.dependency-vulnerabilities.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "✅ Code Metrics: ${{ needs.code-metrics.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "[OK] Security Scan: ${{ needs.bandit-security.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "[OK] Vulnerability Check: ${{ needs.dependency-vulnerabilities.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "[OK] Code Metrics: ${{ needs.code-metrics.result }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Scanned on:** $(date)" >> $GITHUB_STEP_SUMMARY

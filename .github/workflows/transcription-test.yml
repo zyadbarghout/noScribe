@@ -129,7 +129,7 @@ jobs:
           exit 1
         fi
         
-        echo "✓ Successfully installed all dependencies"
+        echo "[OK] Successfully installed all dependencies"
       shell: bash
         
     - name: Verify all dependencies are installed
@@ -156,9 +156,9 @@ jobs:
         for import_name, package_name in required_packages.items():
             try:
                 __import__(import_name)
-                print(f'✓ {package_name}')
+                print(f'[OK] {package_name}')
             except ImportError as e:
-                print(f'✗ {package_name}')
+                print(f'[X] {package_name}')
                 missing.append(package_name)
         if missing:
             print('Missing packages:', missing)
@@ -283,5 +283,5 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '✅ Transcription tests have been run on all platforms. Check the [Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) tab for detailed results.'
+            body: '[OK] Transcription tests have been run on all platforms. Check the [Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) tab for detailed results.'
           })

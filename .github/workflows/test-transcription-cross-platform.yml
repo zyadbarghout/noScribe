@@ -44,7 +44,7 @@ jobs:
             echo "ERROR: test_resources/test_audio.mp3 not found!"
             exit 1
           fi
-          echo "✓ Test audio found"
+          echo "[OK] Test audio found"
           ls -lh test_resources/test_audio.mp3
 
   test-matrix:
@@ -117,11 +117,11 @@ jobs:
         echo "Platform: ${{ env.PLATFORM }}"
         echo "Requirements file: ${{ env.REQ_FILE }}"
         if [ -f "${{ env.REQ_FILE }}" ]; then
-          echo "✓ File exists"
+          echo "[OK] File exists"
           echo "Contents:"
           cat "${{ env.REQ_FILE }}"
         else
-          echo "✗ File not found"
+          echo "[X] File not found"
           exit 1
         fi
       shell: bash
@@ -152,9 +152,9 @@ jobs:
         for import_name, display_name in packages:
           try:
             __import__(import_name)
-            print(f"✓ {display_name}")
+            print(f"[OK] {display_name}")
           except ImportError as e:
-            print(f"✗ {display_name}: {e}")
+            print(f"[X] {display_name}: {e}")
             failed.append(display_name)
         
         if failed:
@@ -165,7 +165,7 @@ jobs:
       run: |
         echo "Checking ffmpeg..."
         ffmpeg -version | head -1
-        echo "✓ ffmpeg available"
+        echo "[OK] ffmpeg available"
 
     - name: Verify models
       shell: python
@@ -181,15 +181,15 @@ jobs:
           model_file = model_path / "model.bin"
           
           if not config_file.exists():
-            print(f"✗ {model_type} model: Missing config.json")
+            print(f"[X] {model_type} model: Missing config.json")
             sys.exit(1)
           
           if not model_file.exists():
-            print(f"✗ {model_type} model: Missing model.bin")
+            print(f"[X] {model_type} model: Missing model.bin")
             sys.exit(1)
           
           size_mb = model_file.stat().st_size / (1024 * 1024)
-          print(f"✓ {model_type} model ({size_mb:.1f} MB)")
+          print(f"[OK] {model_type} model ({size_mb:.1f} MB)")
 
     - name: Verify test audio
       shell: python
@@ -200,11 +200,11 @@ jobs:
         audio_file = Path("test_resources/test_audio.mp3")
         
         if not audio_file.exists():
-          print("✗ Test audio not found")
+          print("[X] Test audio not found")
           sys.exit(1)
         
         size_mb = audio_file.stat().st_size / (1024 * 1024)
-        print(f"✓ Test audio found ({size_mb:.2f} MB)")
+        print(f"[OK] Test audio found ({size_mb:.2f} MB)")
 
     - name: Run transcription test
       id: test
@@ -242,7 +242,7 @@ jobs:
         
         for model_name, model_result in results.get("models", {}).items():
           if model_result:
-            print(f"\n✓ {model_name.upper()} Model: SUCCESS")
+            print(f"\n[OK] {model_name.upper()} Model: SUCCESS")
             print(f"  Language: {model_result.get('language', 'N/A')}")
             print(f"  Probability: {model_result.get('language_probability', 0):.1%}")
             print(f"  Duration: {model_result.get('duration', 0):.2f}s")
@@ -255,7 +255,7 @@ jobs:
               for seg in model_result["segments"][:2]:
                 print(f"    [{seg['start']:.2f}s - {seg['end']:.2f}s] {seg['text']}")
           else:
-            print(f"\n✗ {model_name.upper()} Model: FAILED")
+            print(f"\n[X] {model_name.upper()} Model: FAILED")
             all_passed = False
         
         print("\n" + "=" * 80)
@@ -317,7 +317,7 @@ jobs:
         artifacts_count=$(find . -name "results-*" -type d | wc -l)
         echo "Found $artifacts_count test result sets"
         if [ $artifacts_count -eq 12 ]; then
-          echo "✓ All 12 test combinations completed"
+          echo "[OK] All 12 test combinations completed"
         else
-          echo "⚠ Only $artifacts_count/12 test combinations found (may still be running or some failed)"
+          echo "[WARN] Only $artifacts_count/12 test combinations found (may still be running or some failed)"
         fi

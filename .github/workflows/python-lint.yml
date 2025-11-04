@@ -50,7 +50,7 @@ jobs:
       run: |
         echo "## Python Linting Report" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "✅ Lint checks completed (non-blocking)" >> $GITHUB_STEP_SUMMARY
+        echo "[OK] Lint checks completed (non-blocking)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Tools used:**" >> $GITHUB_STEP_SUMMARY
         echo "- Black (code formatting)" >> $GITHUB_STEP_SUMMARY
