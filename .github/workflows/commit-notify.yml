@@ -1,0 +1,49 @@
+name: Notify on New Commits
+
+on:
+  push:
+    branches: [ main, feature, develop ]
+  workflow_dispatch:
+
+jobs:
+  notify-commit:
+    runs-on: ubuntu-latest
+    name: Commit Notification
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get commit info
+      id: commit_info
+      run: |
+        COMMIT_MSG=$(git log -1 --pretty=%B)
+        COMMIT_AUTHOR=$(git log -1 --pretty=%an)
+        COMMIT_SHA=$(git log -1 --pretty=%h)
+        BRANCH=${{ github.ref_name }}
+        
+        echo "commit_msg<<EOF" >> $GITHUB_OUTPUT
+        echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "commit_author=$COMMIT_AUTHOR" >> $GITHUB_OUTPUT
+        echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+        echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+    - name: Create notification
+      run: |
+        echo "## 📝 New Commit Notification" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Branch:** \`${{ steps.commit_info.outputs.branch }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Author:** ${{ steps.commit_info.outputs.commit_author }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit SHA:** \`${{ steps.commit_info.outputs.commit_sha }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Message:**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "${{ steps.commit_info.outputs.commit_msg }}" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Timestamp:** $(date)" >> $GITHUB_STEP_SUMMARY

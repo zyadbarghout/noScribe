@@ -1,0 +1,149 @@
+name: Release Packaging
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Build Linux Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r environments/requirements_linux.txt
+          sudo apt-get update
+          sudo apt-get install -y fakeroot binutils-multiarch libdbus-glib-1-2 libgtk-3-0
+          
+      - name: Build Linux binary
+        run: |
+          pyinstaller noScribe-linux.spec
+          mkdir -p dist/noScribe-{${{ github.ref }}-linux
+          cp -r dist/noScribe/* dist/noScribe-{${{ github.ref }}-linux/
+          
+      - name: Create tarball
+        run: |
+          cd dist
+          tar czf noScribe-{${{ github.ref }}-linux.tar.gz noScribe-{${{ github.ref }}-linux/
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: noScribe-{${{ github.ref }}-linux
+          path: dist/noScribe-{${{ github.ref }}-linux.tar.gz
+          
+  build-macos:
+    name: Build macOS Package
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r environments/requirements_macOS_x86_64.txt
+          
+      - name: Build macOS binary
+        run: |
+          pyinstaller noScribe-macOS.spec
+          mkdir -p dist/noScribe-{${{ github.ref }}-macos
+          cp -r dist/noScribe.app dist/noScribe-{${{ github.ref }}-macos/
+          
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "noScribe" -srcfolder dist/noScribe-{${{ github.ref }}-macos -ov -format UDZO noScribe-{${{ github.ref }}-macos.dmg
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: noScribe-{${{ github.ref }}-macos
+          path: noScribe-{${{ github.ref }}-macos.dmg
+          
+  build-windows:
+    name: Build Windows Package
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r environments/requirements_win_cpu.txt
+
+      - name: Build Windows binary
+        run: |
+          pyinstaller noScribe-win.spec
+          mkdir dist/noScribe-{${{ github.ref }}-win
+          xcopy /E /I dist/noScribe/ dist/noScribe-{${{ github.ref }}-win/
+
+      - name: Create ZIP archive
+        run: |
+          Compress-Archive -Path dist/noScribe-{${{ github.ref }}-win -DestinationPath noScribe-{${{ github.ref }}-win.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: noScribe-{${{ github.ref }}-win
+          path: noScribe-{${{ github.ref }}-win.zip
+
+  create-release:
+    name: Create Release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: noScribe-{${{ github.ref }}-linux
+          path: ./artifacts
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: noScribe-{${{ github.ref }}-macos
+          path: ./artifacts
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: noScribe-{${{ github.ref }}-win
+          path: ./artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./artifacts/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

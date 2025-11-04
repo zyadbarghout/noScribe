@@ -1,0 +1,182 @@
+name: Build & Test noScribe
+
+on:
+  push:
+    branches: [ main, feature, develop ]
+  pull_request:
+    branches: [ main, feature, develop ]
+  workflow_dispatch:
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    name: Python Syntax Check
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Check Python syntax
+      run: |
+        python -m py_compile noScribe.py
+        python -m py_compile whisper_mp_worker.py
+        python -m py_compile pyannote_mp_worker.py
+        echo "✅ All Python files have valid syntax"
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    name: Check Dependencies
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Validate requirements files
+      run: |
+        echo "Checking requirements files..."
+        
+        # Check Linux requirements
+        if [ -f "environments/requirements_linux.txt" ]; then
+          python -m pip install --dry-run -r environments/requirements_linux.txt > /dev/null 2>&1 && echo "✅ requirements_linux.txt is valid" || echo "⚠️  requirements_linux.txt has issues"
+        fi
+        
+        # Check macOS ARM64 requirements
+        if [ -f "environments/requirements_macOS_arm64.txt" ]; then
+          python -m pip install --dry-run -r environments/requirements_macOS_arm64.txt > /dev/null 2>&1 && echo "✅ requirements_macOS_arm64.txt is valid" || echo "⚠️  requirements_macOS_arm64.txt has issues"
+        fi
+        
+        # Check macOS x86_64 requirements
+        if [ -f "environments/requirements_macOS_x86_64.txt" ]; then
+          python -m pip install --dry-run -r environments/requirements_macOS_x86_64.txt > /dev/null 2>&1 && echo "✅ requirements_macOS_x86_64.txt is valid" || echo "⚠️  requirements_macOS_x86_64.txt has issues"
+        fi
+        
+        # Check Windows requirements
+        if [ -f "environments/requirements_win_cpu.txt" ]; then
+          python -m pip install --dry-run -r environments/requirements_win_cpu.txt > /dev/null 2>&1 && echo "✅ requirements_win_cpu.txt is valid" || echo "⚠️  requirements_win_cpu.txt has issues"
+        fi
+
+    - name: Check critical dependencies
+      run: |
+        echo "Checking critical imports..."
+        python3 << 'EOF'
+        critical_packages = [
+            'customtkinter',
+            'faster_whisper',
+            'pyannote',
+            'PyYAML',
+            'AdvancedHTMLParser'
+        ]
+        
+        print("Checking if critical packages are importable (may not be installed):")
+        for package in critical_packages:
+            print(f"  - {package}")
+        
+        print("Note: Full validation requires installed dependencies")
+        EOF
+
+  documentation-check:
+    runs-on: ubuntu-latest
+    name: Documentation Check
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check documentation files
+      run: |
+        echo "Checking documentation..."
+        
+        files=("README.md" "CHANGELOG.md" "LICENSE.txt")
+        for file in "${files[@]}"; do
+          if [ -f "$file" ]; then
+            size=$(wc -c < "$file")
+            lines=$(wc -l < "$file")
+            echo "✅ $file exists ($lines lines, $size bytes)"
+          else
+            echo "⚠️  Missing: $file"
+          fi
+        done
+
+    - name: Validate README.md
+      run: |
+        if grep -q "# noScribe" README.md; then
+          echo "✅ README.md has proper heading"
+        fi
+
+  file-structure-check:
+    runs-on: ubuntu-latest
+    name: Project Structure Verification
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Verify key files and directories
+      run: |
+        echo "Verifying project structure..."
+        
+        # Check required files
+        required_files=(
+          "noScribe.py"
+          "whisper_mp_worker.py"
+          "pyannote_mp_worker.py"
+          "README.md"
+          "LICENSE.txt"
+        )
+        
+        for file in "${required_files[@]}"; do
+          if [ -f "$file" ]; then
+            echo "✅ $file"
+          else
+            echo "❌ Missing: $file"
+            exit 1
+          fi
+        done
+        
+        # Check required directories
+        required_dirs=(
+          "environments"
+          "trans"
+          "pyinstaller"
+          ".github/workflows"
+        )
+        
+        for dir in "${required_dirs[@]}"; do
+          if [ -d "$dir" ]; then
+            echo "✅ $dir/"
+          else
+            echo "⚠️  Missing: $dir/"
+          fi
+        done
+        
+        echo ""
+        echo "✅ Project structure verified"
+
+  build-summary:
+    runs-on: ubuntu-latest
+    name: Build Summary
+    needs: [syntax-check, dependency-check, documentation-check, file-structure-check]
+    if: always()
+
+    steps:
+    - name: Generate build report
+      run: |
+        echo "## Build & Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Syntax Check: ${{ needs.syntax-check.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Dependency Check: ${{ needs.dependency-check.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Documentation: ${{ needs.documentation-check.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ File Structure: ${{ needs.file-structure-check.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Branch:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY

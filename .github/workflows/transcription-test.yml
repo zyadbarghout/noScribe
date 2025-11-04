@@ -1,0 +1,250 @@
+name: Transcription Test Matrix
+
+on:
+  push:
+    branches: [ main, feature/** ]
+    paths:
+      - 'noScribe.py'
+      - 'whisper_mp_worker.py'
+      - 'pyannote_mp_worker.py'
+      - 'test_transcription.py'
+      - 'run_cross_platform_tests.py'
+      - '.github/workflows/transcription-test.yml'
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_audio_url:
+        description: 'URL to test audio file'
+        required: false
+        default: ''
+
+jobs:
+  test-matrix:
+    name: Test ${{ matrix.os }} - Python ${{ matrix.python-version }} - ${{ matrix.model }} Model
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.9', '3.10', '3.11']
+        model: [fast, precise]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install system dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg libsndfile1
+
+    - name: Install system dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install ffmpeg
+
+    - name: Install system dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco install ffmpeg -y
+
+    - name: Determine requirements file
+      id: req-file
+      run: |
+        import platform
+        import os
+        
+        system = platform.system()
+        machine = platform.machine()
+        
+        if system == "Darwin":
+          if machine == "arm64":
+            req_file = "environments/requirements_macOS_arm64.txt"
+          else:
+            req_file = "environments/requirements_macOS_x86_64.txt"
+        elif system == "Linux":
+          req_file = "environments/requirements_linux.txt"
+        elif system == "Windows":
+          req_file = "environments/requirements_win_cpu.txt"
+        else:
+          req_file = "environments/requirements_linux.txt"
+        
+        print(f"Using requirements file: {req_file}")
+        with open(os.environ['GITHUB_ENV'], 'a') as f:
+          f.write(f"REQ_FILE={req_file}\n")
+      shell: python
+    
+    - name: Display selected requirements file
+      run: |
+        echo "Requirements file: ${{ env.REQ_FILE }}"
+        cat "${{ env.REQ_FILE }}"
+      shell: bash
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        echo "Installing dependencies from ${{ env.REQ_FILE }}"
+        cat "${{ env.REQ_FILE }}"
+        python -m pip install -r "${{ env.REQ_FILE }}"
+        
+    - name: Verify all dependencies are installed
+      run: |
+        python << 'EOF'
+        import sys
+        
+        required_packages = {
+            'faster_whisper': 'faster-whisper',
+            'torch': 'torch',
+            'torchaudio': 'torchaudio',
+            'pyannote': 'pyannote.audio',
+            'customtkinter': 'customtkinter',
+            'PIL': 'Pillow',
+            'yaml': 'PyYAML',
+            'AdvancedHTMLParser': 'AdvancedHTMLParser',
+            'appdirs': 'appdirs',
+            'i18n': 'python-i18n'
+        }
+        
+        print("=" * 80)
+        print("VERIFYING INSTALLED PACKAGES")
+        print("=" * 80)
+        
+        missing = []
+        for import_name, package_name in required_packages.items():
+            try:
+                __import__(import_name)
+                print(f"✓ {package_name}")
+            except ImportError as e:
+                print(f"✗ {package_name} - {e}")
+                missing.append(package_name)
+        
+        if missing:
+            print("\nMissing packages. Installing...")
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, '-m', 'pip', 'install'] + missing,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                print(f"ERROR: {result.stderr}")
+                sys.exit(1)
+            print("All missing packages installed successfully")
+        else:
+            print("\n✓ All required packages are installed!")
+        EOF
+      shell: python
+
+    - name: Verify models directory
+      run: |
+        python -c "from pathlib import Path; models_dir = Path('models'); print(f'Models dir exists: {models_dir.exists()}'); print(f'Fast model: {(models_dir / \"fast\" / \"model.bin\").exists()}'); print(f'Precise model: {(models_dir / \"precise\" / \"model.bin\").exists()}')"
+
+    - name: Run transcription test
+      id: test
+      run: |
+        python test_transcription.py --audio test_resources/test_audio.mp3 --verbose
+      shell: bash
+
+    - name: Check transcription results
+      if: always()
+      run: |
+        import json
+        import tempfile
+        from pathlib import Path
+        
+        # Find the latest results file
+        temp_dir = Path(tempfile.gettempdir())
+        results_files = list(temp_dir.glob("*/noscribe_tests/transcription_results.json"))
+        
+        if not results_files:
+          print("ERROR: No test results found!")
+          exit(1)
+        
+        results_file = sorted(results_files, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+        
+        with open(results_file, 'r') as f:
+          results = json.load(f)
+        
+        print("=" * 80)
+        print("TRANSCRIPTION TEST RESULTS")
+        print("=" * 80)
+        
+        for model_name, model_result in results.get("models", {}).items():
+          if model_result:
+            print(f"\n{model_name.upper()} Model: ✓ SUCCESS")
+            print(f"  Language: {model_result.get('language', 'N/A')}")
+            print(f"  Load Time: {model_result.get('load_time_seconds', 0):.2f}s")
+            print(f"  Transcription Time: {model_result.get('transcription_time_seconds', 0):.2f}s")
+            print(f"  Segments: {model_result.get('segments_count', 0)}")
+            
+            # Show first segment
+            if model_result.get("segments"):
+              seg = model_result["segments"][0]
+              print(f"  Sample: [{seg['start']:.2f}s - {seg['end']:.2f}s] {seg['text']}")
+          else:
+            print(f"\n{model_name.upper()} Model: ✗ FAILED")
+            exit(1)
+      shell: python
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}-${{ matrix.model }}
+        path: |
+          /tmp/noscribe_tests/
+          /var/folders/*/T/noscribe_tests/
+
+    - name: Check for failures
+      if: failure()
+      run: |
+        echo "Test failed for ${{ matrix.os }} with Python ${{ matrix.python-version }} and ${{ matrix.model }} model"
+
+  test-summary:
+    name: Test Summary
+    needs: test-matrix
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Generate summary
+      run: |
+        echo "## Transcription Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Matrix Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- Platforms: Ubuntu, macOS, Windows" >> $GITHUB_STEP_SUMMARY
+        echo "- Python Versions: 3.9, 3.10, 3.11" >> $GITHUB_STEP_SUMMARY
+        echo "- Models: fast, precise" >> $GITHUB_STEP_SUMMARY
+        echo "- Total Test Combinations: 18" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Artifacts" >> $GITHUB_STEP_SUMMARY
+        echo "See artifacts for detailed test results including:" >> $GITHUB_STEP_SUMMARY
+        echo "- Transcription output" >> $GITHUB_STEP_SUMMARY
+        echo "- Performance metrics" >> $GITHUB_STEP_SUMMARY
+        echo "- HTML reports" >> $GITHUB_STEP_SUMMARY
+        echo "- JSON results" >> $GITHUB_STEP_SUMMARY
+
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '✅ Transcription tests have been run on all platforms. Check the [Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) tab for detailed results.'
+          })

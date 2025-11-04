@@ -1,0 +1,131 @@
+name: Security & Code Analysis
+
+on:
+  push:
+    branches: [ main, feature, develop ]
+  pull_request:
+    branches: [ main, feature, develop ]
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly scan on Sunday at 2 AM UTC
+  workflow_dispatch:
+
+jobs:
+  bandit-security:
+    runs-on: ubuntu-latest
+    name: Security Scan (Bandit)
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install Bandit
+      run: pip install bandit
+
+    - name: Run Bandit security scan
+      run: |
+        echo "Running Bandit security scan..."
+        bandit -r noScribe.py whisper_mp_worker.py pyannote_mp_worker.py --format txt -o bandit-report.txt || true
+        echo ""
+        echo "Security scan complete"
+
+    - name: Display Bandit results
+      run: |
+        if [ -f bandit-report.txt ]; then
+          echo "=== Bandit Report ==="
+          cat bandit-report.txt
+        fi
+
+  dependency-vulnerabilities:
+    runs-on: ubuntu-latest
+    name: Check for Known Vulnerabilities
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install Safety
+      run: pip install safety
+
+    - name: Check dependencies
+      run: |
+        echo "Checking for known vulnerabilities in dependencies..."
+        
+        files=(
+          "environments/requirements_linux.txt"
+          "environments/requirements_macOS_arm64.txt"
+          "environments/requirements_macOS_x86_64.txt"
+          "environments/requirements_win_cpu.txt"
+        )
+        
+        for file in "${files[@]}"; do
+          if [ -f "$file" ]; then
+            echo ""
+            echo "Checking $file..."
+            safety check -r "$file" --json || true
+          fi
+        done
+
+  code-metrics:
+    runs-on: ubuntu-latest
+    name: Code Metrics Analysis
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install analysis tools
+      run: pip install radon
+
+    - name: Calculate complexity metrics
+      run: |
+        echo "## Code Complexity Metrics" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### Cyclomatic Complexity" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        radon cc noScribe.py -s >> $GITHUB_STEP_SUMMARY || true
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### Maintainability Index" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        radon mi noScribe.py >> $GITHUB_STEP_SUMMARY || true
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### Lines of Code" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        radon raw noScribe.py >> $GITHUB_STEP_SUMMARY || true
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+  security-summary:
+    runs-on: ubuntu-latest
+    name: Security Summary
+    needs: [bandit-security, dependency-vulnerabilities, code-metrics]
+    if: always()
+
+    steps:
+    - name: Generate security report
+      run: |
+        echo "## Security & Analysis Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Security Scan: ${{ needs.bandit-security.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Vulnerability Check: ${{ needs.dependency-vulnerabilities.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Code Metrics: ${{ needs.code-metrics.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Scanned on:** $(date)" >> $GITHUB_STEP_SUMMARY

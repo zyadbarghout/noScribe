@@ -1,0 +1,58 @@
+name: Python Linting & Code Quality
+
+on:
+  push:
+    branches: [ main, feature, develop ]
+  pull_request:
+    branches: [ main, feature, develop ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint Python Code
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pylint black isort
+
+    - name: Run Black formatter check
+      run: |
+        echo "Checking code formatting with Black..."
+        black --check noScribe.py whisper_mp_worker.py pyannote_mp_worker.py || true
+        echo "Black check complete (warnings only)"
+
+    - name: Run isort import check
+      run: |
+        echo "Checking import sorting with isort..."
+        isort --check-only noScribe.py whisper_mp_worker.py pyannote_mp_worker.py || true
+        echo "isort check complete (warnings only)"
+
+    - name: Run Flake8
+      run: |
+        echo "Running Flake8 linter..."
+        flake8 noScribe.py whisper_mp_worker.py pyannote_mp_worker.py --max-line-length=120 --count --statistics || true
+        echo "Flake8 check complete (warnings only)"
+
+    - name: Generate lint report
+      if: always()
+      run: |
+        echo "## Python Linting Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Lint checks completed (non-blocking)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Tools used:**" >> $GITHUB_STEP_SUMMARY
+        echo "- Black (code formatting)" >> $GITHUB_STEP_SUMMARY
+        echo "- isort (import sorting)" >> $GITHUB_STEP_SUMMARY
+        echo "- Flake8 (style guide)" >> $GITHUB_STEP_SUMMARY
