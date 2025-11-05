@@ -1,0 +1,129 @@
+name: noScribe Transcription Test
+
+on:
+  push:
+    branches: [ main, develop, feature/** ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-transcription:
+    name: Test on ${{ matrix.os }} (Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.9', '3.12']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      # Cache the tiny Whisper model
+      - name: Cache Whisper tiny model
+        id: cache-model
+        uses: actions/cache@v3
+        with:
+          path: models/fast
+          key: whisper-tiny-en-${{ runner.os }}
+      
+      # Download model if not cached
+      - name: Download tiny Whisper model
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        run: |
+          python3 << 'EOF'
+          from pathlib import Path
+          from huggingface_hub import snapshot_download
+          import shutil
+          
+          print("[INFO] Downloading tiny.en model from Hugging Face...")
+          
+          # Create models directory
+          models_dir = Path("models/fast")
+          models_dir.mkdir(parents=True, exist_ok=True)
+          
+          # Download the tiny.en model (smallest - ~37MB)
+          model_path = snapshot_download(
+              repo_id="Systran/faster-whisper-tiny.en",
+              cache_dir=".cache/huggingface"
+          )
+          
+          print(f"[INFO] Downloaded to: {model_path}")
+          
+          # Copy all files to models/fast/
+          source = Path(model_path)
+          for file in source.rglob("*"):
+              if file.is_file():
+                  rel_path = file.relative_to(source)
+                  dest = models_dir / file.name  # Flatten structure
+                  shutil.copy2(file, dest)
+                  print(f"[INFO] Copied: {file.name}")
+          
+          print(f"[OK] Model ready at {models_dir}")
+          
+          # Verify required files
+          required = ["config.json", "model.bin", "tokenizer.json"]
+          for req in required:
+              if not (models_dir / req).exists():
+                  raise FileNotFoundError(f"Missing required file: {req}")
+          
+          print("[OK] All required model files present")
+          EOF
+      
+      # Install FFmpeg
+      - name: Install FFmpeg (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install ffmpeg -y
+      
+      # Install Python dependencies
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install faster-whisper torch huggingface-hub pyyaml
+      
+      # Verify test resources
+      - name: Verify test audio exists
+        shell: bash
+        run: |
+          if [ ! -f "test_resources/test_audio.mp3" ]; then
+            echo "[FAIL] Test audio not found!"
+            exit 1
+          fi
+          echo "[OK] Test audio found:"
+          ls -lh test_resources/test_audio.mp3
+      
+      # Run the core test
+      - name: Run noScribe transcription test
+        shell: bash
+        run: |
+          python3 test_noscribe_core.py
+      
+      # Upload test results on failure
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            *.log
+            test_*.log
+          retention-days: 7
