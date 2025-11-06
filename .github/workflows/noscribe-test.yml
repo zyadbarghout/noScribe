@@ -38,7 +38,7 @@ jobs:
         id: cache-model
         uses: actions/cache@v3
         with:
-          path: models/fast
+          path: models/tiny-test
           key: whisper-tiny-en-${{ runner.os }}
       
       # Download model if not cached
