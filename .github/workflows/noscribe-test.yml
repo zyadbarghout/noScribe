@@ -46,6 +46,11 @@ jobs:
         if: steps.cache-model.outputs.cache-hit != 'true'
         run: python download_test_model.py
       
+      # Verify model was downloaded/cached
+      - name: Verify model exists
+        run: |
+          python -c "import sys; from pathlib import Path; p = Path('models/tiny-test'); print(f'Model dir exists: {p.exists()}'); print(f'Contents: {list(p.glob(\"*\")) if p.exists() else \"N/A\"}'); sys.exit(0 if p.exists() and (p / \"model.bin\").exists() else 1)"
+      
       # Install FFmpeg
       - name: Install FFmpeg (Ubuntu)
         if: runner.os == 'Linux'
