@@ -27,29 +27,19 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       
-      # Install Python dependencies first (needed for model download)
+      # Install Python dependencies
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install faster-whisper torch huggingface-hub pyyaml
       
-      # Cache the tiny Whisper model
-      - name: Cache Whisper tiny model
-        id: cache-model
-        uses: actions/cache@v3
-        with:
-          path: models/tiny-test
-          key: whisper-tiny-en-${{ runner.os }}
-      
-      # Download model if not cached
+      # Download tiny Whisper model using our script
       - name: Download tiny Whisper model
-        if: steps.cache-model.outputs.cache-hit != 'true'
         run: python download_test_model.py
       
-      # Verify model was downloaded/cached
-      - name: Verify model exists
-        run: |
-          python -c "import sys; from pathlib import Path; p = Path('models/tiny-test'); print(f'Model dir exists: {p.exists()}'); print(f'Contents: {list(p.glob(\"*\")) if p.exists() else \"N/A\"}'); sys.exit(0 if p.exists() and (p / \"model.bin\").exists() else 1)"
+      # Verify model files exist
+      - name: Verify model files
+        run: python -c "from pathlib import Path; import sys; p = Path('models/tiny-test'); files = list(p.glob('*')) if p.exists() else []; print(f'Model files: {[f.name for f in files]}'); sys.exit(0 if (p / 'model.bin').exists() else 1)"
       
       # Install FFmpeg
       - name: Install FFmpeg (Ubuntu)
